@@ -14,7 +14,6 @@ import pyvista
 from dolfinx import plot, log
 from dolfinx.nls.petsc import NewtonSolver
 
-
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
@@ -577,7 +576,7 @@ q_func.x.array[:] = 0.0
 
 bb_point = np.array([[0.0, L, 0.0]], dtype=np.float64)
 
-for i in range(1, n_step + 1):
+for i in tqdm(range(1, n_step + 1)):
     problem.PS = PS_diff * i
     n, converged = solver.solve(q_func)
     assert (converged)
@@ -655,5 +654,5 @@ if mesh.comm.rank == 0:
     plt.ylabel("Load (N)")
     plt.legend()
     plt.grid()
-    plt.show()
-    plt.savefig("naghdi_shell.png")
+    #plt.show()
+    plt.savefig(filename/"naghdi_shell.png")
