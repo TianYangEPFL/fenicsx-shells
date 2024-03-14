@@ -620,18 +620,25 @@ phi_func.interpolate(phi_expr)
 u_P2 = Function(phi_FS)
 u_P2.interpolate(u_P2B3)
 
-with dolfinx.io.VTXWriter(mesh.comm, "u_naghdi.bp", [u_P2]) as vtx:
+from pathlib import Path
+
+results_folder = Path("results/nonlinear_Naghdi")
+results_folder.mkdir(exist_ok=True, parents=True)
+filename = results_folder / "semi_cylinder"
+
+with dolfinx.io.VTXWriter(mesh.comm, filename/"u_naghdi.bp", [u_P2]) as vtx:
      vtx.write(0)
 
-with dolfinx.io.VTXWriter(mesh.comm, "theta_naghdi.bp", [theta_P2]) as vtx:
+with dolfinx.io.VTXWriter(mesh.comm, filename/"theta_naghdi.bp", [theta_P2]) as vtx:
      vtx.write(0)
 
-with dolfinx.io.VTXWriter(mesh.comm, "phi_naghdi.bp", [phi_func]) as vtx:
+with dolfinx.io.VTXWriter(mesh.comm, filename/"phi_naghdi.bp", [phi_func]) as vtx:
      vtx.write(0)
 
 
 if mesh.comm.rank == 0:
-    np.savetxt("u3_naghdi.txt", u3_list)
+    np.savetxt(filename/"u3_naghdi.txt", u3_list)
+    np.savetxt(filename/"PS_naghdi.txt", PS_list)
     fig = plt.figure(figsize = (8, 6))
     
     reference_u3 = 1.e-2*np.array([0., 5.421, 16.1, 22.195, 27.657, 32.7, 37.582, 42.633,
