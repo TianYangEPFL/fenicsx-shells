@@ -307,7 +307,7 @@ N = ufl.as_tensor(t * A_contra_ufl[i,j,l,m] * epsilon(F)[l,m], [i,j])
 
 M = ufl.as_tensor( (t**3 / 12.0) * A_contra_ufl[i,j,l,m]*kappa(F, d)[l,m], [i,j])
 
-T = ufl.as_tensor( (t * mu) * a0_contra_ufl[i, j] * gamma(F, d)[j], [i])
+T = ufl.as_tensor( (t * mu * 5.0 / 6.0) * a0_contra_ufl[i, j] * gamma(F, d)[j], [i])
 
 # %% [markdown]
 # ## Define elastic strain energy density
