@@ -131,3 +131,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+demo/RM_clamped_MITC3.ipynb
+demo/RM_simple_supported_MITC4.ipynb
+demo/.vscode/settings.json
+demo/*.bp
+demo/results/
+demo/*.png
+demo/try_Naghdi_mpi.py
+demo/try_nonlinear_Naghdi_semi_cylindrical.ipynb
+demo/output.txt
