@@ -1,4 +1,11 @@
 # %%
+import os
+os.environ["OMP_NUM_THREADS"] = "1" # export OMP_NUM_THREADS=1
+
+
+from mpi4py import MPI
+from petsc4py import PETSc
+
 import numpy as np
 
 import dolfinx
@@ -15,13 +22,12 @@ import typing
 from dolfinx.fem.bcs import DirichletBC
 from dolfinx.fem.function import Function as _Function
 from dolfinx.fem.petsc import assemble_vector, apply_lifting, set_bc
-from mpi4py import MPI
-from petsc4py import PETSc
+
 
 # %%
 from pathlib import Path
 
-results_folder = Path("results/nonlinear_Naghdi/pinched-cylinder")
+results_folder = Path("results/nonlinear_Naghdi/pinched-cylinder/parallel")
 results_folder.mkdir(exist_ok=True, parents=True)
 
 # %% [markdown]
@@ -40,7 +46,7 @@ t = 1.0
 
 # %%
 cell_type = CellType.quadrilateral
-mesh = create_rectangle(MPI.COMM_WORLD, np.array([[0.0, 0.0], [r * np.pi / 2, L]]), [200, 200], cell_type)
+mesh = create_rectangle(MPI.COMM_WORLD, np.array([[0.0, 0.0], [r * np.pi / 2, L]]), [40, 40], cell_type)
 
 # topology dimension = 2
 tdim = mesh.topology.dim
@@ -427,25 +433,6 @@ opts[f"{option_prefix}pc_factor_mat_solver_type"] = "mumps"
 ksp.setFromOptions()
 
 # %%
-file_u = dolfinx.io.VTKFile(mesh.comm, results_folder/"u_naghdi.pvd", "w")
-file_theta = dolfinx.io.VTKFile(mesh.comm, results_folder/"theta_naghdi.pvd", "w")
-file_phi = dolfinx.io.VTKFile(mesh.comm, results_folder/"phi_naghdi.pvd", "w")
-
-def write_files():
-    u_P2B3 = q_func.sub(0).collapse()
-    theta_P2 = q_func.sub(1).collapse()
-
-    phi_FS = functionspace(mesh, blocked_element(P2, shape=(3,)))
-    phi_expr = Expression(phi0_ufl + u_P2B3, phi_FS.element.interpolation_points())
-    phi_func = Function(phi_FS)
-    phi_func.interpolate(phi_expr)
-
-    u_P2 = Function(phi_FS)
-    u_P2.interpolate(u_P2B3)
-
-    file_u.write_function(u_P2, i)
-    file_theta.write_function(theta_P2, i)
-    file_phi.write_function(phi_func, i)
 
 def point_values():
     WA_bb = None
@@ -489,49 +476,3 @@ for i, PS_curr in enumerate(tqdm(PS_list)):
     q_func.x.scatter_forward()
     if mesh.comm.rank == 0:
         print(f"Load step {i:d}, Number of iterations: {n:d}, Load: {problem.PS :.2f} ({PS_max})", flush=True)
-    
-    write_files()
-    # calculate u3 at the point load
-    WA_bb, UB_bb = point_values()
-    if mesh.comm.rank == 0:
-        for WA in WA_bb:
-            if WA is not None:
-                WA_list[i] = WA
-                break
-        
-        for UB in UB_bb:
-            if UB is not None:
-                UB_list[i] = UB
-                break
-
-
-
-# %%
-
-
-if mesh.comm.rank == 0:
-    P_S4R = np.array([0.00, 0.05, 0.075, 0.100, 0.125, 0.15, 0.175,
-                      0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50,
-                      0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85,
-                      0.90, 0.95, 1.00])
-    
-    WA_S4R = np.array([0.00, 9.561, 15.648, 23.164, 29.375, 36.208, 51.499, 56.373,
-                       61.877, 65.498, 68.229, 70.424, 72.204, 73.790, 75.139, 76.331,
-                       77.472, 78.451, 79.339, 80.218, 81.045, 81.766, 82.435, 83.102])
-    UB_S4R = np.array([0.00, -0.233, -0.922, -2.391, -3.872, -2.154, 6.792, 10.448,
-                       14.905, 17.979, 20.365, 22.321, 23.916, 25.381, 26.631, 27.735,
-                       28.843, 29.772, 30.604, 31.471, 32.299, 32.989, 33.619, 34.272])
-    
-    plt.figure(figsize=(8.0, 6.0))
-    plt.plot(WA_S4R, P_S4R, "-", label="$WA-S4R$")
-    plt.plot(UB_S4R, P_S4R, "-", label="$-UB-S4R$")
-    plt.plot(-WA_list, PS_list / PS_max, "o", markersize=5, markerfacecolor='none', markevery = 4, label="$WA-Fenicsx$")
-    plt.plot(UB_list, PS_list / PS_max, "o", markersize=5, markerfacecolor='none', markevery = 4, label="$-UB-Fenicsx$")
-    plt.xlabel("Deflections")
-    plt.ylabel(r"$P/P_{\mathrm{max}}$")
-    plt.legend()
-    plt.grid()
-    plt.tight_layout()
-    plt.savefig(results_folder/"comparisons_200.png")
-
-
