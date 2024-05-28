@@ -140,3 +140,6 @@ demo/*.png
 demo/try_Naghdi_mpi.py
 demo/try_nonlinear_Naghdi_semi_cylindrical.ipynb
 demo/output.txt
+demo/plot_demos.ipynb
+demo/try_mpc.ipynb
+demo/try_arc-length.ipynb
