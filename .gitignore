@@ -143,3 +143,5 @@ demo/output.txt
 demo/plot_demos.ipynb
 demo/try_mpc.ipynb
 demo/try_arc-length.ipynb
+demo/try/*
+demo/old/*
