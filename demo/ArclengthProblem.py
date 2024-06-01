@@ -287,8 +287,8 @@ class ArclengthProblem:
             self.u.x.scatter_forward()
             
             # Check the convergence
-            du_norm1 = du.x.petsc_vec.norm(1)
-            if du_norm1 < self.tol:
+            du_norm_l2 = la.norm(du.x, la.Norm.l2)
+            if du_norm_l2 < self.tol:
                 converged = True
                 break
             else:
@@ -394,9 +394,8 @@ class ArclengthProblem:
             self._lmbda.value += dlmbda
             
             # Check the convergence
-            du.x.petsc_vec.array
-            du_norm1 = du.x.petsc_vec.norm(1)
-            if du_norm1 < self.tol:
+            du_norm_l2 = la.norm(du.x, la.Norm.l2)
+            if du_norm_l2 < self.tol:
                 converged = True
                 break
             else:

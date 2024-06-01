@@ -145,3 +145,4 @@ demo/try_mpc.ipynb
 demo/try_arc-length.ipynb
 demo/try/
 demo/old/
+.DS*
