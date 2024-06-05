@@ -28,9 +28,10 @@ class ArclengthProblem:
         bcs: list[DirichletBC] = [],
         J: ufl.form.Form = None,
         petsc_options: typing.Optional[dict] = None,
-        ps_cells: list[int] = [],
-        ps_basis_values: np.ndarray = [],
-        ps_direction: int = 2,
+        ps_cells: list[list[int]] = [],
+        ps_basis_values: list[np.ndarray] = [],
+        ps_dirs: list[int] = [],
+        ps_scales: list[float] = [],
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
     ):
@@ -65,7 +66,8 @@ class ArclengthProblem:
         # Point source cell and basis values
         self.ps_cells = ps_cells
         self.ps_basis_values = ps_basis_values
-        self.ps_direction = ps_direction
+        self.ps_dirs = ps_dirs
+        self.ps_scales = ps_scales
         
         # Create the residual and external force vectors
         self._Lext = _create_form(
@@ -187,11 +189,11 @@ class ArclengthProblem:
         assemble_vector(b, self._L)
 
         # Add point source term
-        if len(self.ps_cells) > 0:
-            for ps_cell, ps_basis_value in zip(self.ps_cells, self.ps_basis_values):
-                dofs = self.u.function_space.sub(0).sub(self.ps_direction).dofmap.cell_dofs(ps_cell)
+        for ps_cell, ps_basis_value, ps_dir, ps_scale in zip(self.ps_cells, self.ps_basis_values, self.ps_dirs, self.ps_scales):
+            if len(ps_cell) > 0:
+                dofs = self.u.function_space.sub(0).sub(ps_dir).dofmap.cell_dofs(ps_cell[0])
                 with b.localForm() as b_local:
-                    b_local.setValuesLocal(dofs, -ps_basis_value * self._lmbda.value,
+                    b_local.setValuesLocal(dofs, -ps_basis_value*self.lmbda*ps_scale,
                                            addv=PETSc.InsertMode.ADD_VALUES)
         
         # Apply boundary condition
@@ -214,11 +216,11 @@ class ArclengthProblem:
             
         assemble_vector(bext, self._Lext)
         # Add point source term
-        if len(self.ps_cells) > 0:
-            for ps_cell, ps_basis_value in zip(self.ps_cells, self.ps_basis_values):
-                dofs = self.u.function_space.sub(0).sub(self.ps_direction).dofmap.cell_dofs(ps_cell)
+        for ps_cell, ps_basis_value, ps_dir, ps_scale in zip(self.ps_cells, self.ps_basis_values, self.ps_dirs, self.ps_scales):
+            if len(ps_cell) > 0:
+                dofs = self.u.function_space.sub(0).sub(ps_dir).dofmap.cell_dofs(ps_cell[0])
                 with bext.localForm() as bext_local:
-                    bext_local.setValuesLocal(dofs, ps_basis_value,
+                    bext_local.setValuesLocal(dofs, ps_basis_value*ps_scale,
                                            addv=PETSc.InsertMode.ADD_VALUES)
                     
         # Apply homogeneous boundary condition
@@ -251,7 +253,7 @@ class ArclengthProblem:
         self.u1.x.array[:] = 0.0
         self.u.x.array[:] = 0.0
 
-    def NewtonStep(self, lmbda2: float = 0.0, Pred = False) -> typing.Tuple[int, bool]:
+    def NewtonStep(self, Pred_control = False, lmbda2: float = 0.0) -> typing.Tuple[int, bool]:
         """Perform a Newton step.
 
         Args:
@@ -264,7 +266,7 @@ class ArclengthProblem:
         lmbda_backup = self._lmbda.value.copy()
         
         # With Prediction:
-        if Pred:
+        if Pred_control:
             lmbda_pred, u_pred = self.Second_order_prediction(self.s + self.ds)
             self.u.x.array[:] = u_pred.x.array
             self.u.x.scatter_forward()
@@ -304,7 +306,7 @@ class ArclengthProblem:
             
             # update the arclength parameter
             ds0 = self.compute_arclength_increment()
-            if not Pred:
+            if not Pred_control:
                 self.ds = ds0
                 
             self.s0 = self.s1
