@@ -244,7 +244,7 @@ class ArclengthMPCProblem:
     
     def update_mpc(self, dx: PETSc.Vec, x: PETSc.Vec) -> None:
         self.u_mpc.x.petsc_vec.array = x.array_r
-        self.u_mpc.x.petsc_vec.axpy(-1.0, dx)
+        self.u_mpc.x.petsc_vec.axpy(1.0, dx)
         self.u_mpc.x.petsc_vec.ghostUpdate(
             addv=PETSc.InsertMode.INSERT,  
             mode=PETSc.ScatterMode.FORWARD,  
@@ -288,7 +288,7 @@ class ArclengthMPCProblem:
             # Solve the linear system and update the ghost values in the solution vector
             self._solver.solve(self._b, du.x.petsc_vec)
             du.x.scatter_forward()
-            
+            du.x.array[:] *= -1.0
             # update the solution with mpc 
             self.update_mpc(du.x.petsc_vec, self._x)
             
@@ -347,3 +347,79 @@ class ArclengthMPCProblem:
         u_pred.x.array[:] = c0 * self.u0.x.array + c1 * self.u1.x.array + c2 * self.u.x.array
         
         return lmbda_pred, u_pred
+    
+    def ArclengthStep(self) -> typing.Tuple[int, bool]:
+        """Perform an arclength step"""
+        
+        # Increment of the new solution 
+        du1 = _Function(self.u.function_space) # iteration increment 1
+        du2 = _Function(self.u.function_space) # iteration increment 2
+        du = _Function(self.u.function_space) # iteration increment
+        Du = _Function(self.u.function_space) # total increment
+        
+        # backups of the last solution
+        u_backup = self.u.copy()
+        lmbda_backup = self._lmbda.value.copy()
+        
+        # With Prediction:
+        lmbda_pred, u_pred = self.Second_order_prediction(self.s + self.ds)
+        self.u.x.array[:] = u_pred.x.array
+        self._lmbda.value = lmbda_pred
+        
+        i = int(0)
+        while i < self.max_it:
+            # Assemble the residual, Fext and Jacobian
+            self.assemble_Jacobian(self._x, self._A)
+            self.assemble_Residual(self._x, self._b)
+            self.assemble_Fext(self._bext)
+            
+            # compute the "a", "b", "A" coefficients
+            Du.x.array[:] = self.u.x.array - u_backup.x.array
+            Dlmbda = self._lmbda.value - lmbda_backup
+            scalar_b = 2.0 * self.eta * Dlmbda * self._bext.dot(self._bext)
+            scalar_A = (Du.x.petsc_vec.dot(Du.x.petsc_vec) + 
+                        self.eta * Dlmbda**2 * self._bext.dot(self._bext) - self.ds**2)
+            
+            
+            # Solve the linear system and update the ghost values in the solution vector
+            self._solver.solve(self._bext, du1.x.petsc_vec)
+            du1.x.scatter_forward()
+            self._solver.solve(self._b, du2.x.petsc_vec)
+            du2.x.scatter_forward()
+            
+            # Solve the lambda increment
+            dlmbda = (2.0*Du.x.petsc_vec.dot(du2.x.petsc_vec) - scalar_A) / (scalar_b + 2.0*Du.x.petsc_vec.dot(du1.x.petsc_vec))
+            
+            # update the solution
+            du.x.array[:] = -du2.x.array + dlmbda * du1.x.array
+            du.x.scatter_forward()
+            self.update_mpc(du.x.petsc_vec, self._x)
+            
+            # update the lambda parameter
+            self._lmbda.value += dlmbda
+            
+            # Check the convergence
+            du_norm_l2 = _la.norm(du.x, _la.Norm.l2)
+            if du_norm_l2 < self.tol:
+                converged = True
+                break
+            else:
+                i += 1
+                if i == self.max_it:
+                    converged = False
+        
+        if converged:
+            self._lmbda0.value = self._lmbda1.value
+            self._lmbda1.value = lmbda_backup
+            self.u0.x.array[:] = self.u1.x.array 
+            self.u1.x.array[:] = u_backup.x.array
+            # update the arclength parameter
+            self.s0 = self.s1
+            self.s1 = self.s
+            self.s += self.ds
+        else:
+            self._lmbda.value = lmbda_backup
+            self.u.x.array[:] = u_backup.x.array
+            print("Warning: max iterations reached in Arclength step", flush=True)
+        
+        return i+1, converged
